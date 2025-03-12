@@ -1,0 +1,32 @@
+eport:
+step: stage changes
+  command: git add .
+  duration: 0.20099306 seconds
+
+step: commit changes
+  command: git commit -m experimental install script
+  duration: 0.10360599 seconds
+  output: [v2 0df4d38] experimental install script
+ 11 files changed, 193 insertions(+)
+ create mode 100644 _MEIeNEfb7/config.py
+ create mode 100755 _MEIeNEfb7/libb2.so.1
+ create mode 100755 _MEIeNEfb7/libbz2.so.1
+ create mode 100755 _MEIeNEfb7/libcrypto.so.3
+ create mode 100755 _MEIeNEfb7/libffi.so.8
+ create mode 100755 _MEIeNEfb7/libgcc_s.so.1
+ create mode 100755 _MEIeNEfb7/libgomp.so.1
+ create mode 100755 _MEIeNEfb7/libmpdec.so.3
+ create mode 100755 _MEIeNEfb7/libpython3.13.so.1.0
+ create mode 100755 _MEIeNEfb7/libz.so.1
+ create mode 100644 install.sh
+
+
+step: push changes
+  command: git push
+  duration: 8.52273011 seconds
+
+step: TOTAL
+  command: N/A
+  duration: 8.82766128 seconds
+
+total duration: 8.82766128 seconds

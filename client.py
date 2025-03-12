@@ -10,6 +10,7 @@ class Client:
         '''
         :3
         '''
+        curses.use_default_colors()
         self.stdscr = stdscr
         self.debug = debug
         self.running = True
