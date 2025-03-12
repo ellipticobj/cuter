@@ -63,9 +63,8 @@ build() {
     fi
 
     sudo mv "./dist/$EXEC_NAME-$(uname -m)" "$INSTALL_PATH$EXEC_NAME"
-
-    echo "$EXEC_NAME installed to $INSTALL_PATH"
-
+    echo "installed to ${INSTALL_PATH}${EXEC_NAME} yippie"
+    echo "run ${EXEC_NAME} to get started"
 }
 
 # ensures that the script exits immediately if an error occurs
@@ -157,4 +156,4 @@ fi
 chmod +x "$EXEC_NAME"
 sudo mv "$EXEC_NAME" "${INSTALL_PATH}${EXEC_NAME}"
 echo "installed to ${INSTALL_PATH}${EXEC_NAME} yippie"
-echo "run sigma to get started"
+echo "run ${EXEC_NAME} to get started"
