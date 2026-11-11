@@ -1,195 +1,73 @@
-import socket
-import threading
-from datetime import datetime
-import sys
-import time
+import asyncio
 
-class Server:
-    def __init__(self, host='0.0.0.0', port=7171):
-        self.host = host
-        self.port = port
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+# set of all connected client writers
+clients = set()
 
-        self.clients = {} # dictionary of socket: username
-        self.running = True
-        self.lock = threading.Lock()
 
-        self.whitelist = {} # set of whitelisted ips
-        self.blacklist = {} # set of blacklisted ips
+async def handle_client(reader, writer):
+    # Add the new client's writer to our set
+    clients.add(writer)
+    peername = writer.get_extra_info("peername")
+    print(f"[+] New connection from {peername}")
 
-        self.whitelistenabled = False # enables/disables whitelist (ONLY allows list of allowed users)
-        self.blacklistenabled = False # enables/disables blacklist (allows everyone EXCEPT disallowed users)
-
-        self.profanityfilter = 'off' # off, block, censor
-        self.profanitywords = set([]) # add blocked words here
-
-        self.setup()
-
-    def setup(self):
-        '''sets up the server'''
-        if self.whitelistenabled and self.blacklistenabled:
-            print("both whitelist and blacklist cannot be enabled at the same time")
-            sys.exit()
-
-        self.server.bind((self.host, self.port))
-        self.server.listen()
-        self.log(f"server listening at {self.host}:{self.port}")
-
-    def log(self, message, end='\n'):
-        '''prints a log + stores it in a log file'''
-        logfile = "server.log"
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entr = f"[{now}] {message}"
-        print(entr, end=end)
-        with open(logfile, "a") as file:
-            file.write(f"{entr}\n")
-
-    def acceptclient(self):
-        while self.running:
-            try:
-                client, addr = self.server.accept()
-                clientthread = threading.Thread(
-                    target=self.handleclient,
-                    args=(client,addr),
-                    daemon=True
-                )
-                clientthread.start()
-            except OSError:
-                break
-            except Exception as e:
-                self.log(f"error at clientthread: {e}")
-
-    def handleclient(self, clsock, claddr):
-        '''handles client connection'''
-        username = clsock.recv(1024).decode()
-        clip, clport = claddr
-
-        if self.validate(clip):
-            with self.lock:
-                self.clients[clsock] = username
-                self.broadcast(f"{username} joined")
-                self.log(f"{username} joined from {clip}:{claddr}")
-        else:
-            clsock.send("connection rejected".encode())
-            clsock.close()
-            return
-
-        try:
-            while self.running:
-                message = clsock.recv(1024).decode()
-                if not message:
-                    break
-                self.procmessage(username, message)
-        except Exception as e:
-            self.log(f"error handling client {username}: {e}")
-
-        with self.lock:
-            if clsock in self.clients:
-                del self.clients[clsock]
-                self.broadcast(f"{username} has left the chat!")
-                self.log(f"{username} disconnected")
-            clsock.close()
-
-    def procmessage(self, username, message):
-        '''handles messages'''
-        if message.startswith('/'):
-            pass
-
-        if self.profanityfilter:
-            message = self.filter(message)
-
-        if message:
-            self.broadcast(f"{username}: {message}")
-            self.log(f"{username}: {message}")
-
-    def filter(self, message):
-        words = message.split()
-        for i, word in enumerate(words):
-            if word.lower() in self.profanitywords:
-                if self.profanityfilter == "block":
-                    return None
-                elif self.profanityfilter == "censor":
-                    words[i] = "*" * len(word)
-        return " ".join(words)
-
-    def validate(self, addr):
-        '''
-        checks if client's ip is black/whitelisted
-        returns true if user is allowed to connect, falso if disallowed
-        '''
-        if self.whitelistenabled:
-            if addr in self.whitelist:
-                return True
-            else:
-                return False
-        if self.blacklistenabled:
-            if addr in self.blacklist:
-                return False
-            else:
-                return True
-        return True
-
-    def broadcast(self, message):
-        for client in self.clients:
-            try:
-                client.send(message.encode())
-            except:
-                del self.clients[client]
-                self.broadcast(f"{self.clients[client]} has left the chat!")
-                self.log(f"{self.clients[client]} disconnected")
-                client.close()
-
-    def shutdown(self):
-        '''shutting down server'''
-        self.running = False
-        self.log("shutting down server...")
-
-        with self.lock:
-            for client in self.clients:
-                try:
-                    client.send("server is shutting down".encode())
-                    client.close()
-                except:
-                    pass
-            self.clients.clear()
-
-        try:
-            self.server.close()
-        except:
-            pass
-
-    def run(self):
-        self.log("starting threads...")
-        try:
-            acceptthread = threading.Thread(
-                target = self.acceptclient,
-                daemon=True
-            )
-            acceptthread.start()
-        except Exception as e:
-            self.log(f"error: {e}")
-        self.log("done")
-
-def main():
-    server = None
     try:
-        print("starting server...")
-        server = Server()
-        server.run()
+        while True:
+            # read data from the client
+            data = await reader.read(100)
+            if not data:
+                break  # client disconnected
 
-        server.log("checking if server is alive")
-        while server.running:
-            server.log("server is alive")
-            try:
-                time.sleep(20)
-                server.log("checking if server is alive")
-            except KeyboardInterrupt:
-                server.shutdown()
-                break
-    except Exception as e:
-        print(f"server error: {e}")
+            message = data.decode("utf-8").strip()
+            print(f"[{peername}] says: {message}")
+
+            for client_writer in clients:
+                if client_writer != writer:
+                    try:
+                        client_writer.write(
+                            f"[{peername}] says: {message}\n".encode("utf-8")
+                        )
+                        await client_writer.drain()
+                    except Exception as e:
+                        print(f"error broadcasting client message: {e}")
+                        writer.write(f"error sending message: {e}\n".encode("utf-8"))
+
+    except asyncio.CancelledError:
+        pass
+    finally:
+        # Clean up when client disconnects
+        print(f"[-] Connection closed for {peername}")
+        clients.remove(writer)
+        writer.close()
+        await writer.wait_closed()
+
+
+async def handleserverinput():
+    loop = asyncio.get_running_loop()
+    while True:
+        message = await loop.run_in_executor(None, input)
+        if not message.strip():
+            continue
+
+        for client_writer in clients:
+            client_writer.write(f"[SERVER] says: {message}\n".encode("utf-8"))
+            await client_writer.drain()
+
+
+async def main():
+    ip = "127.0.0.1"
+    port = 8888
+    # Start the TCP server on localhost port 8888
+    server = await asyncio.start_server(handle_client, ip, port)
+
+    addr = server.sockets[0].getsockname()
+    print(f"[*] Chat server running on {addr}")
+
+    async with server:
+        await asyncio.gather(server.serve_forever(), handleserverinput())
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[*] Server stopped.")
